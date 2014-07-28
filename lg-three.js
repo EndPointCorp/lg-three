@@ -1,11 +1,12 @@
 var VIEWSYNC = VIEWSYNC || {};
-var THREELG = { 'viewsync': undefined };
+var THREELG = { viewsync: undefined, justInitialized: false };
 
 VIEWSYNC.Connection = function(appname, master, url) {
   var viewsync = io.connect(typeof url === 'undefined' ? '/viewsync' : url);
 
   function sendInitialization() {
     console.log('Sending initialization to slave');
+    THREELG.justInitialized = true;
     viewsync.emit('pov', {
         'type': 'initialization',
         'prerenderSlave': THREELG.prerenderSlave ? THREELG.prerenderSlave.toString() : undefined,
@@ -27,7 +28,7 @@ VIEWSYNC.Connection = function(appname, master, url) {
 
   viewsync.on('sync pov', function(pov) {
     var a;
-    console.debug('viewsync recv pov:', pov);
+    //console.debug('viewsync recv pov:', pov);
     if (master) {
         switch (pov.type) { 
             case 'request-initialization':
@@ -55,7 +56,6 @@ VIEWSYNC.Connection = function(appname, master, url) {
   });
 
   this.sendPov = function(pov) {
-    console.debug('viewsync send pov:', pov);
     viewsync.emit('pov', pov);
   }
 
@@ -102,7 +102,10 @@ THREE.WebGLRenderer = function() {
 
         if (THREELG.master) {
             if (THREELG.prerenderMaster !== undefined) { a = THREELG.prerenderMaster(); }
-            THREELG.viewsync.sendPov({ 'type': 'render', 'prerenderArgs': a });
+            if (a.skipSlaveRender === undefined) {
+                THREELG.justInitialized = false;
+                THREELG.viewsync.sendPov({ 'type': 'render', 'prerenderArgs': a });
+            }
         }
         return that.__old_render( scene, camera, renderTarget, forceClear );
     }
@@ -113,15 +116,3 @@ THREE.WebGLRenderer = function() {
    
     return wglr;
 }
-
-//// We wrap this one differently, because THREE.js depends on the returned Scene
-//// object being an instance of THREE.Scene
-//// XXX FRAGILE!!1 THREE.js may well change in the future so WebGLRenderer and
-//// others also depend on my not breaking their instanceof
-////THREE.Scene.prototype = Object.create(THREE.Scene.prototype);
-//THREE.Scene.prototype.__old_add = THREE.Scene.prototype.add;
-//THREE.Scene.prototype.add = function(a) {
-//    var that = this;
-//    console.log("Adding something to this scene.")
-//    return that.__old_add(a);
-//}
