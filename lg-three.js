@@ -80,39 +80,39 @@ THREE.lg_init = function(appname, prerenderMaster, prerenderSlave, initialScene,
     // anything else that needs to be sent to the slave, because the VIEWSYNC
     // on_connect event will assume they're already set and try to send them
     THREELG.viewsync = new VIEWSYNC.Connection(appname, master, url);
-}
 
-// I think we'll need to copy the scene when the render is called the first time.
+    if (master) {
+        THREE.__old_WebGLRenderer = THREE.WebGLRenderer;
+        THREE.WebGLRenderer = function() {
+            console.log("Here's my wrapper THREE.WebGLRenderer");
+            wglr = new THREE.__old_WebGLRenderer();
+        //    wglr.__old_setSize = wglr.setSize;
+        //    wglr.setSize = function(width, height) {
+        //        var that = this;        // I admit not knowing whether I need this or not
+        //        console.log("Here's my THREE.WebGLRenderer.setSize wrapper");
+        //        return that.__old_setSize(width, height);
+        //    }
 
-THREE.__old_WebGLRenderer = THREE.WebGLRenderer;
-THREE.WebGLRenderer = function() {
-    console.log("Here's my wrapper THREE.WebGLRenderer");
-    wglr = new THREE.__old_WebGLRenderer();
-//    wglr.__old_setSize = wglr.setSize;
-//    wglr.setSize = function(width, height) {
-//        var that = this;        // I admit not knowing whether I need this or not
-//        console.log("Here's my THREE.WebGLRenderer.setSize wrapper");
-//        return that.__old_setSize(width, height);
-//    }
+            wglr.__old_render = wglr.render;
+            wglr.render = function( scene, camera, renderTarget, forceClear ) {
+                var that = this;
+                var a;
 
-    wglr.__old_render = wglr.render;
-    wglr.render = function( scene, camera, renderTarget, forceClear ) {
-        var that = this;
-        var a;
-
-        if (THREELG.master) {
-            if (THREELG.prerenderMaster !== undefined) { a = THREELG.prerenderMaster(); }
-            if (a.skipSlaveRender === undefined) {
-                THREELG.justInitialized = false;
-                THREELG.viewsync.sendPov({ 'type': 'render', 'prerenderArgs': a });
+                if (THREELG.master) {
+                    if (THREELG.prerenderMaster !== undefined) { a = THREELG.prerenderMaster(); }
+                    if (a.skipSlaveRender === undefined) {
+                        THREELG.justInitialized = false;
+                        THREELG.viewsync.sendPov({ 'type': 'render', 'prerenderArgs': a });
+                    }
+                }
+                return that.__old_render( scene, camera, renderTarget, forceClear );
             }
-        }
-        return that.__old_render( scene, camera, renderTarget, forceClear );
-    }
 
-    // Wrap this in a function so that render()'s "this" variable is set to the wglr renderer object
-    // XXX Except I have to pass a scene, camera, etc. to it, so we're doing this elsewhere
-    // THREELG.render = function() { wglr.render; }
-   
-    return wglr;
+            // Wrap this in a function so that render()'s "this" variable is set to the wglr renderer object
+            // XXX Except I have to pass a scene, camera, etc. to it, so we're doing this elsewhere
+            // THREELG.render = function() { wglr.render; }
+        
+            return wglr;
+        }
+    }
 }
